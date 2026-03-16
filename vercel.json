@@ -1,5 +1,10 @@
 {
   "rewrites": [
+    { "source": "/.well-known/oauth-authorization-server", "destination": "/api/.well-known/oauth-authorization-server" },
+    { "source": "/.well-known/oauth-protected-resource", "destination": "/api/.well-known/oauth-protected-resource" },
+    { "source": "/register", "destination": "/api/register" },
+    { "source": "/authorize", "destination": "/api/authorize" },
+    { "source": "/token", "destination": "/api/token" },
     { "source": "/health", "destination": "/api/health" },
     { "source": "/sse", "destination": "/api/sse" },
     { "source": "/messages", "destination": "/api/messages" }
