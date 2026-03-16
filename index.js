@@ -2,6 +2,8 @@
 
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
+const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");
+const http = require("http");
 const { z } = require("zod");
 const fs = require("fs");
 const path = require("path");
@@ -835,9 +837,60 @@ server.tool(
 
 // ─── Start Server ──────────────────────────────────────────────────────
 
+const PORT = process.env.PORT || 3001;
+const mode = process.argv.includes("--stdio") ? "stdio" : "http";
+
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  if (mode === "stdio") {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  } else {
+    let sseTransport = null;
+
+    const httpServer = http.createServer(async (req, res) => {
+      // CORS headers
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+      if (req.method === "OPTIONS") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      if (req.url === "/sse" && req.method === "GET") {
+        sseTransport = new SSEServerTransport("/messages", res);
+        await server.connect(sseTransport);
+        return;
+      }
+
+      if (req.url === "/messages" && req.method === "POST") {
+        if (!sseTransport) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "No SSE connection. Connect to /sse first." }));
+          return;
+        }
+        await sseTransport.handlePostMessage(req, res);
+        return;
+      }
+
+      // Health check
+      if (req.url === "/" || req.url === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok", name: "final-draft-connector", version: "1.0.0" }));
+        return;
+      }
+
+      res.writeHead(404);
+      res.end("Not found");
+    });
+
+    httpServer.listen(PORT, () => {
+      console.log(`Final Draft MCP server running at http://localhost:${PORT}`);
+      console.log(`SSE endpoint: http://localhost:${PORT}/sse`);
+    });
+  }
 }
 
 main().catch(console.error);
